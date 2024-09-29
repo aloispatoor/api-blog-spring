@@ -1,85 +1,64 @@
 package com.apiblog.configuration;
 
-import com.apiblog.auth.AppAuthProvider;
-import com.apiblog.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.AuthenticationManager; 
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.access.AccessDeniedHandler;
-import org.springframework.security.web.authentication.Http403ForbiddenEntryPoint;
-import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler;
-import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
-import org.springframework.security.web.authentication.logout.SimpleUrlLogoutSuccessHandler;
-
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
 @EnableWebSecurity
-public class SecurityConfig extends WebSecurityConfigurerAdapter {
-    UserService userDetailsService;
-    private AccessDeniedHandler accessDeniedHandler;
+public class SecurityConfig {
+    @Autowired
+    private CustomUserDetailsService customUserDetailsService;
 
-    @Override
-    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
-        auth.userDetailsService(userDetailsService);
-    }
-    @Override
-    protected void configure(HttpSecurity http) throws Exception {
-        http.csrf()
-                .disable()
-                .exceptionHandling()
-                .authenticationEntryPoint(new Http403ForbiddenEntryPoint() {
-                })
-                .and()
-                .authenticationProvider(getProvider())
-                .formLogin()
-                .loginProcessingUrl("/login")
-                .successHandler(new AuthenticationLoginSuccessHandler())
-                .failureHandler(new SimpleUrlAuthenticationFailureHandler())
-                .and()
-                .logout()
-                .logoutUrl("/logout")
-                .logoutSuccessHandler(new AuthenticationLogoutSuccessHandler())
-                .invalidateHttpSession(true)
-                .and()
-                .authorizeRequests()
-                .antMatchers("/login").permitAll()
-                .antMatchers("/logout").permitAll()
-                .antMatchers("/api/").permitAll()
-                .antMatchers("/user").authenticated()
-                .anyRequest().permitAll();
-    }
-    private static class AuthenticationLoginSuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
-        @Override
-        public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication)
-                throws IOException, ServletException {
-            response.setStatus(HttpServletResponse.SC_OK);
-        }
-    }
-    private static class AuthenticationLogoutSuccessHandler extends SimpleUrlLogoutSuccessHandler {
-        @Override
-        public void onLogoutSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
-            response.setStatus(HttpServletResponse.SC_OK);
-        }
-    }
+	@Bean
+	public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+		return http.authorizeHttpRequests(auth -> {
+			auth.antMatchers("/admin").hasRole("ADMIN");
+			auth.antMatchers("/user").hasRole("USER");
+			auth.anyRequest().authenticated();
+		}).formLogin(Customizer.withDefaults()).build();
+	}
+
     @Bean
-    public AuthenticationProvider getProvider() {
-        AppAuthProvider provider = new AppAuthProvider();
-        provider.setUserDetailsService(userDetailsService);
-        return provider;
+    public AuthenticationManager authenticationManager(HttpSecurity http, BCryptPasswordEncoder bCryptPasswordEncoder) throws Exception {
+        AuthenticationManagerBuilder authenticationManagerBuilder = http.getSharedObject(AuthenticationManagerBuilder.class);
+        authenticationManagerBuilder.userDetailsService(customUserDetailsService).passwordEncoder(bCryptPasswordEncoder);
+        return authenticationManagerBuilder.build();
     }
+
+	@Bean
+	public UserDetailsService users() {
+		UserDetails user = User.builder()
+			.username("user")
+			.password(passwordEncoder().encode("user"))
+			.roles("USER")
+			.build();
+
+        UserDetails admin = User.builder()
+            .username("user")
+            .password(passwordEncoder().encode("admin"))
+            .roles("USER", "ADMIN")
+            .build();
+
+		return new InMemoryUserDetailsManager(user, admin);
+	}
+
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+	public PasswordEncoder passwordEncoder() {
+		return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+	}
+
 }

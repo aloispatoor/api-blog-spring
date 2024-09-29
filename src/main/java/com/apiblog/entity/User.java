@@ -7,19 +7,27 @@ import javax.persistence.Id;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
-import java.io.Serializable;
 import java.util.Collection;
 
 @Entity
-public class User implements Serializable, UserDetails {
+public class User implements UserDetails {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long userId;
     private String username;
     private String email;
     private String password;
+    private String role;
 
     public User() {
+    }
+
+    public User(Long userId, String username, String email, String password, String role) {
+        this.userId = userId;
+        this.username = username;
+        this.email = email;
+        this.password = password;
+        this.role = role;
     }
 
     public Long getUserId() {
@@ -74,4 +82,17 @@ public class User implements Serializable, UserDetails {
     public boolean isEnabled() {
         return false;
     }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    public String getRole() {
+        return role;
+    }
+
+    public void setRole(String role) {
+        this.role = role;
+    }
+
 }
